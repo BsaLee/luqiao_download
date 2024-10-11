@@ -8,8 +8,8 @@ c:\路桥\download.exe http 127.0.0.1 10809 - - https://www.python.org/ftp/pytho
 
 下载器的完整路径：c:\路桥\download.exe  
 代理协议：`http` 或 `https`  
-代理地址：127.0.0.1  （若无则输入 `-`） 
-代理端口：10809  （若无则输入 `-`） 
+代理地址：127.0.0.1  （若无则输入 `-`）   
+代理端口：10809  （若无则输入 `-`）   
 代理用户名：代理的用户名（若无则输入 `-`）  
 代理密码：代理的密码（若无则输入 `-`）  
 网络文件 URL：[要下载的文件的 URL](https://www.python.org/ftp/python/3.12.6/python-3.12.6-amd64.exe)  
