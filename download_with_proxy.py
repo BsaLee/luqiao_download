@@ -1,16 +1,12 @@
 import os
 import sys
 import requests
-import logging
 import tkinter as tk
-from tkinter import ttk, Text
+from tkinter import ttk, Text, messagebox
 from tkinter import PhotoImage, Label
-from PIL import Image, ImageTk  # 导入 PIL
+from PIL import Image, ImageTk
 import time
-
-# 日志配置
-logging.basicConfig(filename='download.log', level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+import threading
 
 # 常量定义
 CHUNK_SIZE = 8192  # 下载块大小
@@ -18,8 +14,8 @@ UPDATE_INTERVAL = 100  # 更新间隔（毫秒）
 
 # 函数：根据 URL 和代理配置执行下载
 def download_file(proxy_protocol, proxy_address, proxy_port, proxy_username, proxy_password, download_url, save_path, progress_var, speed_label, status_label, retry_button):
-    # 处理代理配置：如果所有代理字段都为空，则直接连接
-    if not (proxy_address and proxy_port):
+    # 处理代理配置：如果代理地址或端口为空，则直接连接
+    if not (proxy_address and proxy_port) or (proxy_address == "-" and proxy_port == "-"):
         proxies = None  # 不使用代理
     else:
         proxy_username = None if proxy_username == "-" else proxy_username
@@ -38,7 +34,6 @@ def download_file(proxy_protocol, proxy_address, proxy_port, proxy_username, pro
 
         if downloaded_size >= total_size:
             status_label.config(text="下载已完成，文件已存在")
-            logging.info(f"Download already completed: {save_path}")
             countdown_and_close(3)  # 启动 3 秒倒计时关闭窗口
             return
 
@@ -75,13 +70,12 @@ def download_file(proxy_protocol, proxy_address, proxy_port, proxy_username, pro
                         # 刷新窗口
                         root.update_idletasks()
             
-            logging.info(f"Download completed: {download_url}")
             status_label.config(text="下载完成")
             countdown_and_close(3)  # 启动 3 秒倒计时关闭窗口
 
     except Exception as e:
-        logging.error(f"Download failed: {download_url} - {e}")
-        status_label.config(text="下载失败")  # 下载失败时更改状态标签文本
+        status_label.config(text="下载失败")
+        messagebox.showerror("下载错误", f"下载失败: {e}")  # 显示错误信息
         retry_button.pack(pady=10)  # 显示重试按钮
 
 # 显示倒计时并关闭窗口
@@ -94,7 +88,7 @@ def countdown_and_close(seconds):
 
 # 启动下载
 def start_download(proxy_protocol, proxy_address, proxy_port, proxy_username, proxy_password, download_url, save_path, progress_var, speed_label, status_label, retry_button):
-    download_file(proxy_protocol, proxy_address, proxy_port, proxy_username, proxy_password, download_url, save_path, progress_var, speed_label, status_label, retry_button)
+    threading.Thread(target=download_file, args=(proxy_protocol, proxy_address, proxy_port, proxy_username, proxy_password, download_url, save_path, progress_var, speed_label, status_label, retry_button)).start()
 
 # 创建图形界面，并显示传递的参数
 def create_gui(proxy_protocol="", proxy_address="", proxy_port="", proxy_username="", proxy_password="", download_url="", save_path=""):
@@ -116,7 +110,7 @@ def create_gui(proxy_protocol="", proxy_address="", proxy_port="", proxy_usernam
     else:
         root.geometry("500x500")  # 如果没有图片，窗口高度为500
 
-    # 创建输入框并显示传递的参数，文本和输入框放在同一行
+    # 创建输入框并显示传递的参数
     for label_text, default_value in [
         ("代理协议:", proxy_protocol),
         ("代理地址:", proxy_address),
@@ -184,8 +178,8 @@ def main():
     else:
         # 参数为空，使用默认值
         proxy_protocol = ""
-        proxy_address = ""
-        proxy_port = ""
+        proxy_address = "-"
+        proxy_port = "-"
         proxy_username = "-"
         proxy_password = "-"
         download_url = ""
