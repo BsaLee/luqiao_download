@@ -12,17 +12,24 @@ import time
 logging.basicConfig(filename='download.log', level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
+# 常量定义
+CHUNK_SIZE = 8192  # 下载块大小
+UPDATE_INTERVAL = 100  # 更新间隔（毫秒）
+
 # 函数：根据 URL 和代理配置执行下载
 def download_file(proxy_protocol, proxy_address, proxy_port, proxy_username, proxy_password, download_url, save_path, progress_var, speed_label, status_label, retry_button):
-    # 处理代理配置：当 proxy_username 和 proxy_password 是 "-" 时，将其视为 None
-    proxy_username = None if proxy_username == "-" else proxy_username
-    proxy_password = None if proxy_password == "-" else proxy_password
+    # 处理代理配置：如果所有代理字段都为空，则直接连接
+    if not (proxy_address and proxy_port):
+        proxies = None  # 不使用代理
+    else:
+        proxy_username = None if proxy_username == "-" else proxy_username
+        proxy_password = None if proxy_password == "-" else proxy_password
 
-    proxy_auth = f"{proxy_username}:{proxy_password}@" if proxy_username and proxy_password else ""
-    proxies = {
-        "http": f"{proxy_protocol}://{proxy_auth}{proxy_address}:{proxy_port}",
-        "https": f"{proxy_protocol}://{proxy_auth}{proxy_address}:{proxy_port}"
-    }
+        proxy_auth = f"{proxy_username}:{proxy_password}@" if proxy_username and proxy_password else ""
+        proxies = {
+            "http": f"{proxy_protocol}://{proxy_auth}{proxy_address}:{proxy_port}",
+            "https": f"{proxy_protocol}://{proxy_auth}{proxy_address}:{proxy_port}"
+        }
 
     # 检查文件是否已存在
     if os.path.exists(save_path):
@@ -52,18 +59,18 @@ def download_file(proxy_protocol, proxy_address, proxy_port, proxy_username, pro
 
             start_time = time.time()  # 记录开始时间
             with open(save_path, 'ab') as f:
-                for chunk in r.iter_content(chunk_size=8192):
+                for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
                     if chunk:
                         f.write(chunk)
                         downloaded_size += len(chunk)
-                        
-                        # 更新进度条
-                        progress_var.set(downloaded_size)
-                        
-                        # 计算下载速度
-                        elapsed_time = time.time() - start_time
-                        speed = downloaded_size / elapsed_time / 1024  # KB/s
-                        speed_label.config(text=f"下载速度: {speed:.2f} KB/s")
+
+                        # 更新进度条和速度
+                        if time.time() - start_time >= UPDATE_INTERVAL / 1000:  # 限制更新频率
+                            progress_var.set(downloaded_size)
+                            elapsed_time = time.time() - start_time
+                            speed = downloaded_size / elapsed_time / 1024  # KB/s
+                            speed_label.config(text=f"下载速度: {speed:.2f} KB/s")
+                            start_time = time.time()  # 重置开始时间
                         
                         # 刷新窗口
                         root.update_idletasks()
@@ -90,12 +97,12 @@ def start_download(proxy_protocol, proxy_address, proxy_port, proxy_username, pr
     download_file(proxy_protocol, proxy_address, proxy_port, proxy_username, proxy_password, download_url, save_path, progress_var, speed_label, status_label, retry_button)
 
 # 创建图形界面，并显示传递的参数
-def create_gui(proxy_protocol, proxy_address, proxy_port, proxy_username, proxy_password, download_url, save_path):
+def create_gui(proxy_protocol="", proxy_address="", proxy_port="", proxy_username="", proxy_password="", download_url="", save_path=""):
     global root, progress_bar, retry_button
 
     root = tk.Tk()
     root.title("文件下载器")
-    
+
     # 加载图片
     image_path = "1.png"
     if os.path.exists(image_path):
@@ -165,17 +172,24 @@ def create_gui(proxy_protocol, proxy_address, proxy_port, proxy_username, proxy_
 
 # 自动下载函数
 def main():
-    if len(sys.argv) != 8:
-        print("Usage: python download_with_proxy.py <proxy_protocol> <proxy_address> <proxy_port> <proxy_username> <proxy_password> <download_url> <save_path>")
-        sys.exit(1)
-
-    proxy_protocol = sys.argv[1]
-    proxy_address = sys.argv[2]
-    proxy_port = sys.argv[3]
-    proxy_username = sys.argv[4]  # 使用 "-" 代表空值
-    proxy_password = sys.argv[5]  # 使用 "-" 代表空值
-    download_url = sys.argv[6]
-    save_path = sys.argv[7]
+    # 检查是否传入参数
+    if len(sys.argv) == 8:
+        proxy_protocol = sys.argv[1]
+        proxy_address = sys.argv[2]
+        proxy_port = sys.argv[3]
+        proxy_username = sys.argv[4]  # 使用 "-" 代表空值
+        proxy_password = sys.argv[5]  # 使用 "-" 代表空值
+        download_url = sys.argv[6]
+        save_path = sys.argv[7]
+    else:
+        # 参数为空，使用默认值
+        proxy_protocol = ""
+        proxy_address = ""
+        proxy_port = ""
+        proxy_username = "-"
+        proxy_password = "-"
+        download_url = ""
+        save_path = ""
 
     create_gui(proxy_protocol, proxy_address, proxy_port, proxy_username, proxy_password, download_url, save_path)
 
