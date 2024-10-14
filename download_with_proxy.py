@@ -11,6 +11,7 @@ import threading
 # 常量定义
 CHUNK_SIZE = 8192  # 下载块大小
 UPDATE_INTERVAL = 100  # 更新间隔（毫秒）
+MAX_RETRIES = 3  # 最大重试次数
 
 # 函数：根据 URL 和代理配置执行下载
 def download_file(proxy_protocol, proxy_address, proxy_port, proxy_username, proxy_password, download_url, save_path, progress_var, speed_label, status_label, retry_button):
@@ -42,41 +43,85 @@ def download_file(proxy_protocol, proxy_address, proxy_port, proxy_username, pro
         downloaded_size = 0
         headers = {}
 
-    try:
-        # 请求下载文件，支持断点续传
-        with requests.get(download_url, headers=headers, stream=True, proxies=proxies, timeout=10) as r:
-            r.raise_for_status()
-            total_size = int(r.headers.get('content-length', 0)) + downloaded_size
+    retries = 0  # 重试计数
 
-            # 进度条最大值为总大小
-            progress_var.set(0)
-            progress_bar["maximum"] = total_size
+    while retries < MAX_RETRIES:
+        try:
+            # 请求下载文件，支持断点续传
+            with requests.get(download_url, headers=headers, stream=True, proxies=proxies, timeout=10) as r:
+                r.raise_for_status()
+                total_size = int(r.headers.get('content-length', 0)) + downloaded_size
 
-            start_time = time.time()  # 记录开始时间
-            with open(save_path, 'ab') as f:
-                for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded_size += len(chunk)
+                # 进度条最大值为总大小
+                progress_var.set(0)
+                progress_bar["maximum"] = total_size
 
-                        # 更新进度条和速度
-                        if time.time() - start_time >= UPDATE_INTERVAL / 1000:  # 限制更新频率
-                            progress_var.set(downloaded_size)
-                            elapsed_time = time.time() - start_time
-                            speed = downloaded_size / elapsed_time / 1024  # KB/s
-                            speed_label.config(text=f"下载速度: {speed:.2f} KB/s")
-                            start_time = time.time()  # 重置开始时间
-                        
-                        # 刷新窗口
-                        root.update_idletasks()
-            
-            status_label.config(text="下载完成")
-            countdown_and_close(3)  # 启动 3 秒倒计时关闭窗口
+                start_time = time.time()  # 记录开始时间
+                with open(save_path, 'ab') as f:
+                    for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded_size += len(chunk)
 
-    except Exception as e:
-        status_label.config(text="下载失败")
-        messagebox.showerror("下载错误", f"下载失败: {e}")  # 显示错误信息
-        retry_button.pack(pady=10)  # 显示重试按钮
+                            # 更新进度条和速度
+                            if time.time() - start_time >= UPDATE_INTERVAL / 1000:  # 限制更新频率
+                                progress_var.set(downloaded_size)
+                                elapsed_time = time.time() - start_time
+                                speed = downloaded_size / elapsed_time / 1024  # KB/s
+                                speed_label.config(text=f"下载速度: {speed:.2f} KB/s")
+                                start_time = time.time()  # 重置开始时间
+
+                            # 刷新窗口
+                            root.update_idletasks()
+
+                status_label.config(text="下载完成")
+                countdown_and_close(3)  # 启动 3 秒倒计时关闭窗口
+                return  # 下载成功，返回
+
+        except requests.exceptions.RequestException:
+            retries += 1  # 增加重试计数
+            if retries < MAX_RETRIES:
+                status_label.config(text=f"下载失败，正在重试... (尝试 {retries}/{MAX_RETRIES})")
+                time.sleep(1)  # 等待 1 秒后重试
+            else:
+                # 代理失效，尝试直连
+                status_label.config(text="代理无效，尝试本地直连")
+                proxies = None  # 切换为直连
+                try:
+                    # 尝试直连下载
+                    with requests.get(download_url, headers=headers, stream=True, timeout=10) as r:
+                        r.raise_for_status()  # 检查请求是否成功
+                        total_size = int(r.headers.get('content-length', 0)) + downloaded_size
+
+                        # 进度条最大值为总大小
+                        progress_var.set(0)
+                        progress_bar["maximum"] = total_size
+
+                        start_time = time.time()  # 记录开始时间
+                        with open(save_path, 'ab') as f:
+                            for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
+                                if chunk:
+                                    f.write(chunk)
+                                    downloaded_size += len(chunk)
+
+                                    # 更新进度条和速度
+                                    if time.time() - start_time >= UPDATE_INTERVAL / 1000:  # 限制更新频率
+                                        progress_var.set(downloaded_size)
+                                        elapsed_time = time.time() - start_time
+                                        speed = downloaded_size / elapsed_time / 1024  # KB/s
+                                        speed_label.config(text=f"下载速度: {speed:.2f} KB/s")
+                                        start_time = time.time()  # 重置开始时间
+
+                                    # 刷新窗口
+                                    root.update_idletasks()
+
+                        status_label.config(text="下载完成")
+                        countdown_and_close(3)  # 启动 3 秒倒计时关闭窗口
+                        return  # 下载成功，返回
+                except Exception as e:
+                    status_label.config(text="下载失败")
+                    retry_button.pack(pady=10)  # 显示重试按钮
+                    return  # 直连下载失败，返回
 
 # 显示倒计时并关闭窗口
 def countdown_and_close(seconds):
